@@ -1,0 +1,25 @@
+{
+  "name": "workfront-event-source",
+  "version": "0.0.1",
+  "description": "Event ingestion via Workfront Event Subscription API",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"*** Write some tests! ***\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nordstrom/workfront-event-source.git"
+  },
+  "keywords": [
+    "Workfront",
+    "event-sourced",
+    "aws",
+    "serverless"
+  ],
+  "author": "Nordstrom, Inc.",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Nordstrom/workfront-event-source/issues"
+  },
+  "homepage": "https://github.com/Nordstrom/workfront-event-source#readme"
+}
