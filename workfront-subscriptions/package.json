@@ -4,7 +4,7 @@
   "description": "Intergate with Workfront subscription service.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Write some tests!\""
+    "test": "./node_modules/.bin/mocha ./test.spec.js"
   },
   "repository": {
     "type": "git",
@@ -20,6 +20,8 @@
     "node-fetch": "^1.7.3"
   },
   "devDependencies": {
-    "mocha": "^3.5.3"
+    "chai": "^4.1.2",
+    "mocha": "^3.5.3",
+    "proxyquire": "^1.8.0"
   }
 }
