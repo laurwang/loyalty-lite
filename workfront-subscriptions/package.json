@@ -1,0 +1,27 @@
+{
+  "name": "workfront-subscriptions",
+  "version": "0.0.1",
+  "description": "Intergate with Workfront subscription service.",
+  "main": "index.js",
+  "scripts": {
+    "test": "./node_modules/.bin/mocha ./test.spec.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": [
+    "workfront",
+    "subscriptions"
+  ],
+  "author": "Nordstrom Technology",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "node-fetch": "^1.7.3"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "mocha": "^3.5.3",
+    "proxyquire": "^1.8.0"
+  }
+}
