@@ -1,0 +1,45 @@
+frameworkVersion: '>=1.0.0 <2.0.0'
+
+service: ${self:custom.project.stream.name}
+
+custom:
+  stage: ${opt:stage, self:custom.private.stage}
+  private: ${file(../private.yml)}
+  project: ${file(../project.yml)}
+  # Stream Versions & Exports
+  # WARNING: each project that uses these will have to define the following two attributes in its serverless.yml: (custom.streamVersion, custom.stream)
+  streamVersion: 1 # The version of this service to depend upon
+  stream: ${self:} # externally, use `${file(~/stream/serverless.yml)}`, replacing the `~` therein with the appropriate relative reference [e.g. '..' or '../..']
+  # Exports
+  exportStreamName: ${self:custom.stream.service}:${self:custom.stage}:StreamName:${self:custom.streamVersion}
+  exportStreamArn: ${self:custom.stream.service}:${self:custom.stage}:StreamArn:${self:custom.streamVersion}
+
+provider:
+  name: aws
+  deploymentBucket: ${self:custom.project.deploymentBucket}
+  runtime: nodejs6.10
+  profile: ${self:custom.private.profile}
+  region: ${self:custom.private.region}
+
+resources:
+  Resources:
+    # Event Source Stream
+    Stream:
+      Type: 'AWS::Kinesis::Stream'
+      Properties:
+        Name: ${self:custom.project.stream.name}
+        ShardCount: 3
+
+  Outputs:
+    StreamName:
+      Description: The Name of the Retail Stream
+      Value:
+        Ref: Stream
+      Export:
+        Name: ${self:custom.stream.custom.exportStreamName}
+    StreamArn:
+      Description: The ARN for the Retail Stream
+      Value:
+        Fn::GetAtt: [ Stream, Arn ]
+      Export:
+        Name: ${self:custom.stream.custom.exportStreamArn}

@@ -1,0 +1,19 @@
+# Services must include this file as follows:
+# ```
+# custom:
+#   project: ${file(../project.yml)}}
+# ```
+# Top Level Project
+name: workfront-event-source
+deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${self:custom.private.region}
+
+stream:
+  name: ${self:custom.stage}-${self:custom.project.name}-stream
+  arn: arn:aws:kinesis:${self:custom.private.region}:${self:custom.private.accountId}:stream/${self:custom.project.stream.name}
+
+eventHandler:
+  name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
+  objCodeEventTypePairs: OPTASK-CREATE|OPTASK-UPDATE|OPTASK-DELETE
+  # whole sets, for reference
+  #objCodes: USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE
+  #eventTypes: CREATE|DELETE|UPDATE|SHARE

@@ -1,0 +1,16 @@
+{
+  "name": "eventHandler",
+  "version": "0.0.1",
+  "description": "Service to transform and write Workfront events to a Kinesis stream.",
+  "main": "handler.js",
+  "scripts": {},
+  "author": "Nordstrom",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/Nordstrom/workfront-event-source/issues"
+  },
+  "dependencies": {
+    "ajv": "^4.10.4",
+    "workfront-subscriptions": "../workfront-subscriptions"
+  }
+}

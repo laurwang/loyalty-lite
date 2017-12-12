@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "self": {
+    "vendor": "com.nordstrom",
+    "name": "workfront/subscription-event",
+    "format": "jsonschema",
+    "version": "1-0-0"
+  },
+  "type": "object",
+  "properties": {
+    "eventType":  { "type": "string", "enum": ["CREATE", "DELETE", "UPDATE", "SHARE"] },
+    "subscriptionId": { "type": "string"},
+    "newState": {
+      "$ref":"#/definitions/workfrontObject"
+    },
+    "oldState": {
+      "$ref":"#/definitions/workfrontObject"
+    },
+    "eventTime": {
+      "type": "object",
+      "properties": {
+        "nano": { "type": "number"},
+        "epochSecond": { "type": "number"}
+      },
+      "required": [
+        "nano",
+        "epochSecond"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "definitions":{
+    "workfrontObject": {
+      "type": "object",
+      "properties": {
+        "ID": { "type": "string"},
+        "objCode":  { "type": "string", "enum": ["USER", "PORT", "PRGM", "PROJ", "TASK", "OPTASK", "TMPL", "PTLSEC", "PTLTAB", "CMPY", "DOCU", "NOTE"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "eventType",
+    "subscriptionId",
+    "newState",
+    "oldState",
+    "eventTime"
+  ],
+  "additionalProperties": false
+}

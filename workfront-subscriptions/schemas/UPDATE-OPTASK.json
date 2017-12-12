@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/schema#",
+  "self": {
+    "vendor": "com.nordstrom",
+    "name": "workfront/UPDATE-OPTASK",
+    "format": "jsonschema",
+    "version": "1-0-0"
+  },
+  "type": "object",
+  "properties": {
+    "schema":  { "type": "string", "format": "uri" },
+    "ID": { "type": "string"},
+    "objCode":  { "type": "string", "pattern": "^OPTASK$" },
+    "oldState": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string"},
+        "ownerID": { "type": "string"},
+        "categoryID": { "type": ["string", "null"] },
+        "status":  { "type": "string"},
+        "referenceNumber": { "type": "number"},
+        "teamID": { "type": ["string", "null"] },
+        "entryDate": { "type": "string" },
+        "lastUpdateDate": { "type": "string" },
+        "projectID": { "type": "string"},
+        "description": { "type": ["string", "null"] },
+        "priority": { "type": "number"},
+        "enteredByID": { "type": "string"},
+        "assignedToID":  { "type": ["string", "null"] },
+        "lastUpdatedByID": { "type": "string"},
+        "customerID": { "type": "string"},
+        "accessorIDs": { "type": "array", "items": { "type": "string"} },
+        "parameterValues":{ "type": ["object", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "newState": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string"},
+        "ownerID": { "type": "string"},
+        "categoryID": { "type": ["string", "null"] },
+        "status":  { "type": "string"},
+        "referenceNumber": { "type": "number"},
+        "teamID": { "type": ["string", "null"] },
+        "entryDate": { "type": "string" },
+        "lastUpdateDate": { "type": "string" },
+        "projectID": { "type": "string"},
+        "description": { "type": ["string", "null"] },
+        "priority": { "type": "number"},
+        "enteredByID": { "type": "string"},
+        "assignedToID":  { "type": ["string", "null"] },
+        "lastUpdatedByID": { "type": "string"},
+        "customerID": { "type": "string"},
+        "accessorIDs": { "type": "array", "items": { "type": "string"} },
+        "parameterValues":{ "type": ["object", "null"] }
+      },
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "schema",
+    "ID",
+    "objCode",
+    "oldState",
+    "newState"
+  ],
+  "additionalProperties": false
+}

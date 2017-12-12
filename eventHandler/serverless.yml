@@ -1,0 +1,134 @@
+frameworkVersion: '>=1.0.0 <2.0.0'
+
+service: ${self:custom.project.eventHandler.name}
+
+plugins:
+  - subscribe-workfront-plugin
+
+custom:
+  stage: ${opt:stage, self:custom.private.stage}
+  private: ${file(../private.yml)}
+  project: ${file(../project.yml)}
+  stream: ${file(../stream/serverless.yml)}
+  streamVersion: 1
+  eventHandlerVersion: 1 # The version of this service to depend upon
+  eventHandler: ${self:} # externally, use `${file(~/eventHandler/serverless.yml)}`, replacing the `~` therein with the appropriate relative reference [e.g. '..' or '../..']
+  # Exports
+  exportEventHandlerRestApi: ${self:custom.eventHandler.service}:${self:custom.stage}:EventHandlerRestApi:${self:custom.eventHandlerVersion}
+
+provider:
+  name: aws
+  deploymentBucket: ${self:custom.project.deploymentBucket}
+  runtime: nodejs6.10
+  profile: ${self:custom.private.profile}
+  region: ${self:custom.private.region}
+
+functions:
+  eventHandler:
+    role:
+      Fn::GetAtt: [ EventHandler, Arn ]
+    handler: handler.eventHandler
+    environment:
+      STREAM_NAME:
+        Fn::ImportValue: ${self:custom.stream.custom.exportStreamName}
+      WFAPI_KEY: ${self:custom.private.WF.apiKey}
+      WFAPI_ENDPOINT: ${self:custom.private.WF.apiEndpoint}
+      WFOBJ_CODES_EVENT_TYPES: ${self:custom.project.eventHandler.objCodeEventTypePairs}
+    events:
+      - http:
+          path: eventHandler
+          method: post
+          # authorizer: aws_iam # TODO need serverless at 1.14.0+ to do this simply (get rid of resource block below)
+          cors:
+            origins:
+              - '*'
+            headers:
+              - Content-Type
+              - X-Amz-Date
+              - Authorization
+              - X-Api-Key
+              - X-Amz-Security-Token
+              - X-Amz-User-Agent
+            allowCredentials: false
+
+resources:
+  Resources:
+    # Log Group
+    EventHandlerLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /aws/lambda/${self:service}-${self:custom.stage}-eventHandler
+        RetentionInDays: 7
+
+    EventHandler: # role for the Event Handler Lambda to write to logs and the Kinesis Stream
+      Type: AWS::IAM::Role
+      Properties:
+        Path: /
+        RoleName: ${self:custom.stage}EventHandler${self:custom.eventHandlerVersion}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: sts:AssumeRole
+              Principal:
+                Service: lambda.amazonaws.com
+        ManagedPolicyArns:
+          - ${self:custom.private.teamPolicy}
+        Policies:
+          - PolicyName: CreateAndWriteToLogStream
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'logs:CreateLogStream'
+                    - 'logs:PutLogEvents'
+                  Resource:
+                    - Fn::Join:
+                      - ':'
+                      - - Fn::GetAtt: [ EventHandlerLogGroup, Arn ]
+                        - '*'
+          - PolicyName: WriteToKinesis
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 'kinesis:PutRecord'
+                  Resource:
+                    Fn::ImportValue: ${self:custom.stream.custom.exportStreamArn}
+
+    # TODO after update serverless install to 1.14.0 or above replace this with simple way (see above)
+    ApiGatewayMethodEventhandlerPost:
+      Type: AWS::ApiGateway::Method
+      Properties:
+        HttpMethod: POST
+        RequestParameters: {}
+        ResourceId:
+          Ref: ApiGatewayResourceEventhandler
+        RestApiId:
+          Ref: ApiGatewayRestApi
+        AuthorizationType: NONE # AWS_IAM # NB this is the only bit that is different from the default cloud-formation template built by Serverless, when no auth is applied ('NONE')
+        Integration:
+          IntegrationHttpMethod: POST
+          Type: AWS_PROXY
+          Uri:
+            Fn::Join:
+            - ''
+            - - 'arn:aws:apigateway:'
+              - Ref: AWS::Region
+              - ":lambda:path/2015-03-31/functions/"
+              - Fn::GetAtt:
+                - EventHandlerLambdaFunction
+                - Arn
+              - "/invocations"
+        MethodResponses: []
+
+
+  Outputs:
+    EventHandlerRestApi:
+      Description: API used to submit producer events to the Kinesis Stream
+      Value:
+        Ref: ApiGatewayRestApi
+      Export:
+        Name: ${self:custom.eventHandler.custom.exportEventHandlerRestApi}

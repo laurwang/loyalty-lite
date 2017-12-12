@@ -5,7 +5,23 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"*** Write some tests! ***\"",
-    "lint": "./node_modules/.bin/eslint ./**/*.js"
+    "lint": "./node_modules/.bin/eslint ./**/*.js",
+
+    "env": "./build/0.env.sh",
+    "ins": "./build/1.install.sh",
+    "sls": "./build/2.sls.sh",
+
+    "root:install": "npm run env && npm run ins -- \"Installing Top-Level Project Dependencies\"                       .",
+    "root:install:all":"npm run root:install && npm run eventHandler:install",
+    "root:deploy:all": "npm run stream:deploy && npm run eventHandler:deploy",
+    "root:remove:all": "npm run eventHandler:remove && npm run stream:remove",
+
+    "stream:deploy": "npm run env && npm run sls -- deploy \"Deploying Workfront Event Stream\"                        ./stream",
+    "stream:remove": "npm run env && npm run sls -- remove \"Removing Workfront Event Stream\"                         ./stream",
+
+    "eventHandler:install": "npm run env && npm run ins -- \"Installing Event Handler Dependencies\"                   ./eventHandler",
+    "eventHandler:deploy": "npm run env && npm run sls -- deploy \"Deploying Event Handler\"                           ./eventHandler",
+    "eventHandler:remove": "npm run env && npm run sls -- remove \"Removing Event Handler\"                            ./eventHandler"
   },
   "pre-commit": [
     "lint"
@@ -27,11 +43,13 @@
   },
   "homepage": "https://github.com/Nordstrom/workfront-event-source#readme",
   "devDependencies": {
+    "aws-sdk": "^2.67.0",
     "eslint": "^4.6.1",
     "eslint-config-airbnb": "^15.1.0",
     "eslint-plugin-import": "^2.7.0",
     "eslint-plugin-jsx-a11y": "^5.1.1",
     "eslint-plugin-react": "^7.3.0",
-    "pre-commit": "^1.2.2"
+    "pre-commit": "^1.2.2",
+    "serverless": "1.11.0"
   }
 }
