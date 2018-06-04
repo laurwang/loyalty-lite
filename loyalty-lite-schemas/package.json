@@ -1,0 +1,16 @@
+{
+  "name": "loyalty-lite-schemas",
+  "version": "0.0.1",
+  "description": "Serves up schemas for loyalty-lite.",
+  "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": [
+    "twilio",
+    "streaming"
+  ],
+  "author": "Lauren Wang",
+  "license": "Apache-2.0"
+}
