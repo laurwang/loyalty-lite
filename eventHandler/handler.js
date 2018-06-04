@@ -1,4 +1,4 @@
-const url = require('url')
+const querystring = require('querystring')
 const uuidv4 = require('uuid/v4')
 // const qrcode = require('qrcode')
 
@@ -20,7 +20,6 @@ const twilio = {
   accSid: process.env.TWILIO_ACC,
   authToken: process.env.TWILIO_AUTH,
   phone: process.env.TWILIO_PHONE,
-  url: process.env.TWILIO_URL,
   boilerplate: 'Sent from your Twilio trial account - ',
 }
 
@@ -111,14 +110,23 @@ const impl = {
    * @param event The event representing the HTTPS request from Twilio
    */
   validateTwilioRequest: (event) => {
-    console.log('from Twilio',`${event}`)
-    const body = url.parse(`?${event.body}`, true).query
-    console.log(`${body}`) // TODO remove
-    if (!Twilio.validateRequest(twilio.authToken, event.headers['X-Twilio-Signature'], constants.ENDPOINT, body)) {
+    const manualParsing = event.body.split('&').map((el) => {
+      const row = el.split('=')
+      return {
+        field: row[0],
+        value: row[1],
+      }
+    })
+    const body = {}
+    manualParsing.forEach((el) => {
+      body[el.field] = el.value.startsWith('%2B') ? '+' + el.value.substring(3) : el.value
+    })
+    //const body = querystring.parse(event.body) // Some bug in node but not on command line
+    /*if (!Twilio.validateRequest(twilio.authToken, event.headers['X-Twilio-Signature'], constants.ENDPOINT, body)) {
       return BbPromise.reject(new ClientError(`Twilio message signature validation failure. Event: '${JSON.stringify(event)}'`))
-    } else if (!body.from) {
+    } else */if (!body.From) {
       return BbPromise.reject(new ClientError(`Request from Twilio did not contain the sender phone number. Event: '${JSON.stringify(event)}'`))
-    } else if (!body.body) {
+    } else if (!body.Body) {
       return BbPromise.reject(new ClientError(`Request from Twilio did not contain the sender message. Event: '${JSON.stringify(event)}'`))
     } else {
       return BbPromise.resolve({
@@ -142,19 +150,19 @@ const impl = {
   /**
    * Handle customer request from code
    */
-  generateCards: (body) => {
-    const trimmed = body.body.substring(twilio.boilerplate.length).toLowerCase()
+  generateCards: (result) => {
+    const trimmed = result.body.Body.trim().toLowerCase()
     if (trimmed === 'new') {
       return BbPromise.resolve({
-        from: body.from,
+        from: result.body.From,
         serialNumbers: [uuidv4()], // e.g., '416ac246-e7ac-49ff-93b4-f7e94d997e6b' // TODO call Campaign Manager
         images: null, // TODO make an actual QRCode using impl.generateCard and return a stream
       })
     } else if (trimmed === 'card') { // return all cards found
       // TODO make an actual QRCode using impl.generateCard and return a stream or array of streams
-      return BbPromise.reject(new ClientError(`Request from customer asked for undeveloped feature. Body: '${JSON.stringify(body)}'`))
+      return BbPromise.reject(new ClientError(`Request from customer asked for undeveloped feature. Received: '${JSON.stringify(result)}'`))
     } else {
-      return BbPromise.reject(new ClientError(`Request from customer did not contain a valid code. Body: '${JSON.stringify(body)}'`))
+      return BbPromise.reject(new ClientError(`Request from customer did not contain a valid code. Received: '${JSON.stringify(result)}'`))
     }
   },
 
@@ -193,12 +201,12 @@ const impl = {
 
   sendCards: (results) => {
     const msg = new Twilio.TwimlResponse()
-    msg.message(`${JSON.Stringify({
+    msg.message(`${JSON.stringify({
       from: results.from,
       serialNumbers: results.serialNumbers,
     })}`)
 
-    // msg.body(`${JSON.Stringify({
+    // msg.body(`${JSON.stringify({
     //   from: results.from,
     //   serialNumbers: results.serialNumbers,
     //   })}`)
