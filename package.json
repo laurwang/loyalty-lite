@@ -1,7 +1,7 @@
 {
-  "name": "workfront-event-source",
+  "name": "loyalty-lite",
   "version": "0.0.1",
-  "description": "Event ingestion via Workfront Event Subscription API",
+  "description": "Event ingestion from Twilio and other services hitting HTTP endpoint",
   "main": "index.js",
   "scripts": {
     "test": "echo \"*** Write some tests! ***\"",
@@ -13,35 +13,28 @@
 
     "root:install": "npm run env && npm run ins -- \"Installing Top-Level Project Dependencies\"                       .",
     "root:install:all":"npm run root:install && npm run eventHandler:install",
-    "root:deploy:all": "npm run stream:deploy && npm run eventHandler:deploy",
-    "root:remove:all": "npm run eventHandler:remove && npm run stream:remove",
-
-    "stream:deploy": "npm run env && npm run sls -- deploy \"Deploying Workfront Event Stream\"                        ./stream",
-    "stream:remove": "npm run env && npm run sls -- remove \"Removing Workfront Event Stream\"                         ./stream",
+    "root:deploy:all": "npm run eventHandler:deploy",
+    "root:remove:all": "npm run eventHandler:remove",
 
     "eventHandler:install": "npm run env && npm run ins -- \"Installing Event Handler Dependencies\"                   ./eventHandler",
     "eventHandler:deploy": "npm run env && npm run sls -- deploy \"Deploying Event Handler\"                           ./eventHandler",
     "eventHandler:remove": "npm run env && npm run sls -- remove \"Removing Event Handler\"                            ./eventHandler"
   },
-  "pre-commit": [
-    "lint"
-  ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Nordstrom/workfront-event-source.git"
+    "url": "git+https://github.com/laurwang/loyalty-lite.git"
   },
   "keywords": [
-    "Workfront",
-    "event-sourced",
+    "twilio",
     "aws",
     "serverless"
   ],
-  "author": "Nordstrom, Inc.",
+  "author": "Lauren Wang",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/Nordstrom/workfront-event-source/issues"
+    "url": "https://github.com/laurwang/loyalty-lite/issues"
   },
-  "homepage": "https://github.com/Nordstrom/workfront-event-source#readme",
+  "homepage": "https://github.com/laurwang/loyalty-lite#readme",
   "devDependencies": {
     "aws-sdk": "^2.67.0",
     "eslint": "^4.6.1",
@@ -49,7 +42,6 @@
     "eslint-plugin-import": "^2.7.0",
     "eslint-plugin-jsx-a11y": "^5.1.1",
     "eslint-plugin-react": "^7.3.0",
-    "pre-commit": "^1.2.2",
-    "serverless": "1.11.0"
+    "serverless": "^1.27.3"
   }
 }

@@ -4,8 +4,9 @@
 #   project: ${file(../project.yml)}}
 # ```
 # Top Level Project
-name: workfront-event-source
-deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${self:custom.private.region}
+name: loyalty-lite
+deploymentBucket: lauren-serverless-deploy
+#deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${self:custom.private.region}
 
 stream:
   name: ${self:custom.stage}-${self:custom.project.name}-stream
@@ -13,7 +14,5 @@ stream:
 
 eventHandler:
   name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
-  objCodeEventTypePairs: OPTASK-CREATE|OPTASK-UPDATE|OPTASK-DELETE
-  # whole sets, for reference
-  #objCodes: USER|PORT|PRGM|PROJ|TASK|OPTASK|TMPL|PTLSEC|PTLTAB|CMPY|DOCU|NOTE
-  #eventTypes: CREATE|DELETE|UPDATE|SHARE
+  bucket: ${self:custom.stage}.loyalty-lite-images
+  bucketArn: arn:aws:s3:::${self:custom.project.eventHandler.bucket}

@@ -1,16 +1,19 @@
 {
   "name": "eventHandler",
   "version": "0.0.1",
-  "description": "Service to transform and write Workfront events to a Kinesis stream.",
+  "description": "Service to handle Twilio event.",
   "main": "handler.js",
   "scripts": {},
-  "author": "Nordstrom",
+  "author": "Lauren Wang",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/Nordstrom/workfront-event-source/issues"
+    "url": "https://github.com/laurwang/loyalty-lite/issues"
   },
   "dependencies": {
-    "ajv": "^4.10.4",
-    "workfront-subscriptions": "../workfront-subscriptions"
+    "ajv": "^4.11.3",
+    "bluebird": "^3.4.7",
+    "loyalty-lite-schemas": "../loyalty-lite-schemas",
+    "twilio": "^2.11.1",
+    "uuid": "^3.2.1"
   }
 }

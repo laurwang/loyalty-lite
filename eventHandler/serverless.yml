@@ -2,15 +2,12 @@ frameworkVersion: '>=1.0.0 <2.0.0'
 
 service: ${self:custom.project.eventHandler.name}
 
-plugins:
-  - subscribe-workfront-plugin
-
 custom:
   stage: ${opt:stage, self:custom.private.stage}
   private: ${file(../private.yml)}
   project: ${file(../project.yml)}
-  stream: ${file(../stream/serverless.yml)}
-  streamVersion: 1
+  # stream: ${file(../stream/serverless.yml)}
+  # streamVersion: 1
   eventHandlerVersion: 1 # The version of this service to depend upon
   eventHandler: ${self:} # externally, use `${file(~/eventHandler/serverless.yml)}`, replacing the `~` therein with the appropriate relative reference [e.g. '..' or '../..']
   # Exports
@@ -29,13 +26,24 @@ functions:
       Fn::GetAtt: [ EventHandler, Arn ]
     handler: handler.eventHandler
     environment:
-      STREAM_NAME:
-        Fn::ImportValue: ${self:custom.stream.custom.exportStreamName}
-      WFAPI_KEY: ${self:custom.private.WF.apiKey}
-      WFAPI_ENDPOINT: ${self:custom.private.WF.apiEndpoint}
-      WFOBJ_CODES_EVENT_TYPES: ${self:custom.project.eventHandler.objCodeEventTypePairs}
+      ENDPOINT_TWILIO:
+        Fn::Join:
+          - ''
+          - - https://
+            - Ref: ApiGatewayRestApi
+            - .execute-api.${self:custom.private.region}.amazonaws.com/${self:custom.stage}/sms
+      # STREAM_NAME:
+      #   Fn::ImportValue: ${self:custom.stream.custom.exportStreamName}
+      # IMAGE_BUCKET: ${self:custom.project.eventHandler.bucket}
+      TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
+      TWILIO_AUTH: ${self:custom.private.twilio.authToken} # TODO use KMS to encrpyt this
+      TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}
     events:
       - http:
+          path: sms
+          method: post
+          cors: true
+      - http: # for other stuff
           path: eventHandler
           method: post
           # authorizer: aws_iam # TODO need serverless at 1.14.0+ to do this simply (get rid of resource block below)
@@ -72,8 +80,6 @@ resources:
               Action: sts:AssumeRole
               Principal:
                 Service: lambda.amazonaws.com
-        ManagedPolicyArns:
-          - ${self:custom.private.teamPolicy}
         Policies:
           - PolicyName: CreateAndWriteToLogStream
             PolicyDocument:
@@ -88,46 +94,27 @@ resources:
                       - ':'
                       - - Fn::GetAtt: [ EventHandlerLogGroup, Arn ]
                         - '*'
-          - PolicyName: WriteToKinesis
-            PolicyDocument:
-              Version: '2012-10-17'
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - 'kinesis:PutRecord'
-                  Resource:
-                    Fn::ImportValue: ${self:custom.stream.custom.exportStreamArn}
-
-    # TODO after update serverless install to 1.14.0 or above replace this with simple way (see above)
-    ApiGatewayMethodEventhandlerPost:
-      Type: AWS::ApiGateway::Method
-      Properties:
-        HttpMethod: POST
-        RequestParameters: {}
-        ResourceId:
-          Ref: ApiGatewayResourceEventhandler
-        RestApiId:
-          Ref: ApiGatewayRestApi
-        AuthorizationType: NONE # AWS_IAM # NB this is the only bit that is different from the default cloud-formation template built by Serverless, when no auth is applied ('NONE')
-        Integration:
-          IntegrationHttpMethod: POST
-          Type: AWS_PROXY
-          Uri:
-            Fn::Join:
-            - ''
-            - - 'arn:aws:apigateway:'
-              - Ref: AWS::Region
-              - ":lambda:path/2015-03-31/functions/"
-              - Fn::GetAtt:
-                - EventHandlerLambdaFunction
-                - Arn
-              - "/invocations"
-        MethodResponses: []
-
+          # - PolicyName: StoreImageInBucket
+          #   PolicyDocument:
+          #     Version: '2012-10-17'
+          #     Statement:
+          #       - Effect: Allow
+          #         Action:
+          #           - 's3:putObject'
+          #         Resource: ${self:custom.project.eventHandler.bucketArn}/i/p/*
+          # - PolicyName: WriteToKinesis
+          #   PolicyDocument:
+          #     Version: '2012-10-17'
+          #     Statement:
+          #       - Effect: Allow
+          #         Action:
+          #           - 'kinesis:PutRecord'
+          #         Resource:
+          #           Fn::ImportValue: ${self:custom.stream.custom.exportStreamArn}
 
   Outputs:
     EventHandlerRestApi:
-      Description: API used to submit producer events to the Kinesis Stream
+      Description: API used to handle Twilio svents
       Value:
         Ref: ApiGatewayRestApi
       Export:

@@ -1,42 +1,76 @@
-
+const url = require('url')
+const uuidv4 = require('uuid/v4')
+// const qrcode = require('qrcode')
 
 const aws = require('aws-sdk') // eslint-disable-line import/no-unresolved, import/no-extraneous-dependencies
+const BbPromise = require('bluebird')
+/**
+ * AWS
+ */
+aws.config.setPromisesDependency(BbPromise)
+// const dynamo = new aws.DynamoDB.DocumentClient()
+// const kms = new aws.KMS()
+// const s3 = new aws.S3()
 
-const WF = require('workfront-subscriptions')
+const Twilio = require('twilio')
+/**
+ * Twilio
+ */
+const twilio = {
+  accSid: process.env.TWILIO_ACC,
+  authToken: process.env.TWILIO_AUTH,
+  phone: process.env.TWILIO_PHONE,
+  url: process.env.TWILIO_URL,
+  boilerplate: 'Sent from your Twilio trial account - ',
+}
 
-const wf = WF(process.env.WFAPI_KEY, process.env.WFAPI_ENDPOINT, process.env.WFOBJ_CODES_EVENT_TYPES)
+const SCHEMAS = require('loyalty-lite-schemas')
+
+const llSchemas = SCHEMAS()
 
 const AJV = require('ajv')
 
 const ajv = new AJV()
 const makeSchemaId = schema => `${schema.self.vendor}/${schema.self.name}/${schema.self.version}`
-
-// To validate it is a Workfront subscription event
-const wfEnvelopeSchema = wf.getEnvelopeSchema()
-const wfEnvelope = makeSchemaId(wfEnvelopeSchema)
-ajv.addSchema(wfEnvelopeSchema, wfEnvelope)
-
-// TODO is this overkill checking here?  Should this be down to the event consumers instead?
-// To validate the fields payload. NB Some services may wish to add to the list of required fields in the schemas.
-// TODO figure out what all the possible fields are, then set additionalProperties false.  Also, may need to allow nulls
-// for some fields, based on errors from (non-Store-Events) events.
-// TODO put in something for the other objCodes' schemas.
-const OBJECTS_FOR_FIELD_CHECK = wf.getObjCodes()
-for (let i = 0; i < OBJECTS_FOR_FIELD_CHECK.length; i++) {
-  const schemaToAdd = wf.getPayloadSchema(OBJECTS_FOR_FIELD_CHECK[i])
-  if (schemaToAdd) {
-    ajv.addSchema(schemaToAdd, makeSchemaId(schemaToAdd))
-  }
-}
+const twilioIncomingRequest = llSchemas.getLoyaltyLiteSchema('twilioIncomingRequest')
+const twilioIncomingRequestId = makeSchemaId(twilioIncomingRequest)
+ajv.addSchema(twilioIncomingRequest, twilioIncomingRequestId)
 
 const constants = {
   INVALID_REQUEST: 'Invalid Request: could not validate request to the schema provided.',
-  INTEGRATION_ERROR: 'Kinesis Integration Error',
+  KINESIS_INTEGRATION_ERROR: 'Kinesis Integration Error',
+  S3_INTEGRATION_ERROR: 'S3 Integration Error',
+
+  SERVICE: 'Loyalty Lite',
   API_NAME: 'Event Handler',
+
+  ENDPOINT: process.env.ENDPOINT,
+  IMAGE_BUCKET: process.env.IMAGE_BUCKET,
 }
 
-const impl = {
-  // check these are ok (i.e., Workfront does not keep trying to deliver the same event, unless something goes wrong, though Kinesis error is not really their problem, but still nice to get the re-delivery).
+/**
+ * Errors
+ */
+class ClientError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = constants.INVALID_REQUEST
+  }
+}
+// class KinesisError extends Error {
+//   constructor(message) {
+//     super(message)
+//     this.name = constants.KINESIS_INTEGRATION_ERROR
+//   }
+// }
+// class S3Error extends Error {
+//   constructor(message) {
+//     super(message)
+//     this.name = constants.S3_INTEGRATION_ERROR
+//   }
+// }
+
+const util = {
   response: (statusCode, body) => ({
     statusCode,
     headers: {
@@ -46,119 +80,186 @@ const impl = {
     body,
   }),
 
-  clientError: (error, event) => {
-    console.log(error)
-    return impl.response(400, `${constants.API_NAME} ${constants.INVALID_REQUEST}  ${error}.  Event: '${JSON.stringify(event)}'`)
+  // kinesisError: (schemaName, err) => {
+  //   console.log(err)
+  //   return util.response(500, util.logMessage(constants.KINESIS_INTEGRATION_ERROR, `trying to write an event for '${JSON.stringify(schemaName)}'`))
+  // },
+
+  // S3Error: (phone, err) => {
+  //   console.log(err)
+  //   return util.response(500, util.logMessage(constants.S3_INTEGRATION_ERROR, `trying to write image stream for '${JSON.stringify(phone)}'`))
+  // },
+
+  // success: response => util.response(200, JSON.stringify(response)),
+}
+
+const impl = {
+  /**
+   * Validate that the given event validates against the request schema
+   * @param event The event representing the HTTPS request from Twilio
+   */
+  validateApiGatewayRequest: (event) => {
+    if (!ajv.validate(twilioIncomingRequestId, event)) { // bad request
+      return BbPromise.reject(new ClientError(`Mismatch versus request schema: ${ajv.errorsText()}.  Event: '${JSON.stringify(event)}'`))
+    } else {
+      return BbPromise.resolve(event)
+    }
   },
 
-  kinesisError: (schemaName, err) => {
-    console.log(err)
-    return impl.response(500, `${constants.API_NAME} - ${constants.INTEGRATION_ERROR} trying to write an event for '${JSON.stringify(schemaName)}'`)
-  },
-
-  success: response => impl.response(200, JSON.stringify(response)),
-
-  validateAndWriteKinesisEventFromApiEndpoint(event, callback) {
-    const received = new Date().toISOString()
-    const eventData = JSON.parse(event.body)
-    console.log('WFE', eventData)
-
-    // TODO less verbose errors
-    if (!ajv.validate(wfEnvelope, eventData)) {
-      callback(null, impl.clientError(`Could not validate event as a Workfront subscription event.  Errors: ${ajv.errorsText()}`, eventData))
-    } else if (eventData.eventType !== 'DELETE' && OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.newState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.newState.objCode}/1-0-0`, eventData.newState)) {
-      callback(null, impl.clientError(`Could not validate the newState payload to the schema for ${eventData.newState.objCode} .  Errors: ${ajv.errorsText()}`, eventData.newState))
-    } else if (eventData.eventType === 'CREATE' && Object.keys(eventData.oldState).length === 0) { // a true CREATE event, i.e., no previous state available
-      const origin = `workfront/${eventData.newState.objCode}/CREATE/${eventData.newState.categoryID}`
-      eventData.newState.schema = `com.nordstrom/${origin}/1-0-0`
-      console.log('constructed schema for payload fields', eventData.newState.schema) // TODO remove
-
-      const kinesis = new aws.Kinesis()
-      const newEvent = {
-        Data: JSON.stringify({
-          schema: 'com.nordstrom/workfront/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
-          timeOrigin: received, // TODO flag and handle re-try by looking at Workfront timestamp and received timestamp.  Use Workfront timestamp instead here.
-          data: eventData.newState,
-          origin,
-        }),
-        PartitionKey: eventData.newState.ID,
-        StreamName: process.env.STREAM_NAME,
-      }
-
-      kinesis.putRecord(newEvent, (err, data) => {
-        if (err) {
-          callback(null, impl.kinesisError(eventData.newState.schema, err))
-        } else {
-          callback(null, impl.success(data))
-        }
-      })
-    } else if (OBJECTS_FOR_FIELD_CHECK.indexOf(eventData.oldState.objCode) > -1 && !ajv.validate(`com.nordstrom/workfront/${eventData.oldState.objCode}/1-0-0`, eventData.oldState)) {
-      callback(null, impl.clientError(`Could not validate the oldState payload to the schema for ${eventData.oldState.objCode} .  Errors: ${ajv.errorsText()}`, eventData.oldState))
-    } else if (eventData.eventType !== 'DELETE' && (eventData.oldState.objCode !== eventData.newState.objCode || eventData.oldState.ID !== eventData.newState.ID)) { // call out inexplicable changes to state.  This *should* never be satisfied, or something odd is going on with Workfront.
-      callback(null, impl.clientError(`Object code or ID has changed for ${eventData.oldState.ID}, ${eventData.oldState.objCode}.`, eventData.newState))
-    } else { // NB all routing info like origin or schema are constructed using the oldState, because--if some abuse of Workfront functionality is going on--we either will do nothing or we will reinstate the oldState, which is considered the last ok set of details.
-      const origin = `workfront/${eventData.oldState.objCode}/${eventData.eventType}/${eventData.oldState.categoryID}` // Should reflect whether it was from a WF CREATE or UPDATE (or DELETE, though that hasn't a Workfront ambiguity issue)
-      const keyId = eventData.oldState.ID
-      const objCode = eventData.oldState.objCode
-
-      let schema = 'com.nordstrom/workfront'
-      let updates
-      // The consumer will need to tinker with the OPTASK schema, which is a bit unfortunate.  Otherwise, we'll need to have the consumer have one method handle all event types.
-      if (eventData.eventType === 'DELETE') {
-        schema = `${schema}/${eventData.oldState.objCode}/DELETE/${eventData.oldState.categoryID}/1-0-0`
-
-        eventData.oldState.schema = schema
-
-        updates = eventData.oldState
-      } else {
-        schema = `${schema}/UPDATE-${eventData.oldState.objCode}/${eventData.oldState.categoryID}/1-0-0`
-
-        delete eventData.oldState.ID
-        delete eventData.oldState.objCode
-        delete eventData.newState.ID
-        delete eventData.newState.objCode
-
-        updates = {
-          schema,
-          ID: keyId,
-          objCode,
-          oldState: eventData.oldState,
-          newState: eventData.newState,
-        }
-      }
-      console.log('constructed origin and schema for payload fields', origin, schema) // TODO remove
-
-      const kinesis = new aws.Kinesis()
-      const newEvent = {
-        Data: JSON.stringify({
-          schema: 'com.nordstrom/workfront/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
-          timeOrigin: received, // TODO flag and handle re-try by looking at Workfront timestamp and received timestamp.  Use Workfront timestamp instead here.
-          data: updates,
-          origin,
-        }),
-        PartitionKey: keyId,
-        StreamName: process.env.STREAM_NAME,
-      }
-
-      kinesis.putRecord(newEvent, (err, data) => {
-        if (err) {
-          callback(null, impl.kinesisError(eventData.newState.schema, err))
-        } else {
-          callback(null, impl.success(data))
-        }
+  /**
+   * Validate the request as having a proper signature from Twilio.  This provides authentication that the request came from Twillio.
+   * @param event The event representing the HTTPS request from Twilio
+   */
+  validateTwilioRequest: (event) => {
+    console.log('from Twilio',`${event}`)
+    const body = url.parse(`?${event.body}`, true).query
+    console.log(`${body}`) // TODO remove
+    if (!Twilio.validateRequest(twilio.authToken, event.headers['X-Twilio-Signature'], constants.ENDPOINT, body)) {
+      return BbPromise.reject(new ClientError(`Twilio message signature validation failure. Event: '${JSON.stringify(event)}'`))
+    } else if (!body.from) {
+      return BbPromise.reject(new ClientError(`Request from Twilio did not contain the sender phone number. Event: '${JSON.stringify(event)}'`))
+    } else if (!body.body) {
+      return BbPromise.reject(new ClientError(`Request from Twilio did not contain the sender message. Event: '${JSON.stringify(event)}'`))
+    } else {
+      return BbPromise.resolve({
+        // event,
+        body,
       })
     }
   },
+
+  // generateCards: (phone) => {
+  //   const serialNumber = uuidv4()
+  //   const stream
+  //   // TODO see https://nodejs.org/api/stream.html#stream_event_pipe and
+  //   //https://stackoverflow.com/questions/44335139/upload-a-file-stream-to-s3-without-a-file-and-from-memory
+  //   return qrcode.toFileStream(stream, `${JSON.stringify({
+  //     phone,
+  //     serialNumber,
+  //   })}`)
+  // },
+
+  /**
+   * Handle customer request from code
+   */
+  generateCards: (body) => {
+    const trimmed = body.body.substring(twilio.boilerplate.length).toLowerCase()
+    if (trimmed === 'new') {
+      return BbPromise.resolve({
+        from: body.from,
+        serialNumbers: [uuidv4()], // e.g., '416ac246-e7ac-49ff-93b4-f7e94d997e6b' // TODO call Campaign Manager
+        images: null, // TODO make an actual QRCode using impl.generateCard and return a stream
+      })
+    } else if (trimmed === 'card') { // return all cards found
+      // TODO make an actual QRCode using impl.generateCard and return a stream or array of streams
+      return BbPromise.reject(new ClientError(`Request from customer asked for undeveloped feature. Body: '${JSON.stringify(body)}'`))
+    } else {
+      return BbPromise.reject(new ClientError(`Request from customer did not contain a valid code. Body: '${JSON.stringify(body)}'`))
+    }
+  },
+
+  // /**
+  //  * Using the results of the `impl.generateCards` invocation, place the obtained image into the
+  //  * proper location of the bucket for collection by Twilio.
+  //  * @param results An array of images obtained from `getQRCodes`.  Details:
+  //  */
+  // storeImages: (results) => {
+  //   const from = results.from
+  //   const serialNumbers = results.serialNumbers
+  //   const images = results.images // TODO consume an array of streams
+
+  //   const image = images[0] // TODO parallel write all as streams uploaded to S3
+
+  //   const bucketKey = `i/p/${from}/0` // TODO parallel write all
+
+  //   const params = {
+  //     Bucket: constants.IMAGE_BUCKET,
+  //     Key: bucketKey,
+  //     Body: image.data,
+  //     ContentType: image.contentType,
+  //     Metadata: {
+  //       serialNumber: image.serialNumber,
+  //     },
+  //   }
+  //   return s3.putObject(params).promise().then(
+  //     () => BbPromise.resolve({
+  //       from,
+  //       serialNumbers,
+  //       images: [ `${constants.IMAGE_BUCKET}/${bucketKey}` ], // TODO multiple images
+  //     }),
+  //     ex => BbPromise.reject(new ServerError(`Error placing image into S3: ${ex}`)) // eslint-disable-line comma-dangle
+  //   )
+  // },
+
+  sendCards: (results) => {
+    const msg = new Twilio.TwimlResponse()
+    msg.message(`${JSON.Stringify({
+      from: results.from,
+      serialNumbers: results.serialNumbers,
+    })}`)
+
+    // msg.body(`${JSON.Stringify({
+    //   from: results.from,
+    //   serialNumbers: results.serialNumbers,
+    //   })}`)
+    // msg.media(results.images) // how do i give them multiple?
+    return msg.toString()
+  },
+
+  // writeKinesisEvent: (event, callback) => {
+  //   const received = new Date().toISOString()
+  //   const eventData = JSON.parse(event.body)
+  //   console.log('Twilio Event', eventData)
+  //     eventData.schema = `com.starbucks/event-ledger/stream-ingress/1-0-0`
+
+  //     const kinesis = new aws.Kinesis()
+  //     const newEvent = {
+  //       Data: JSON.stringify({
+  //         schema: 'com.starbucks/event-ledger/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
+  //         timeOrigin: received, // TODO flag and handle re-try by looking at Workfront timestamp and received timestamp.  Use Workfront timestamp instead here.
+  //         data: eventData.body,
+  //         origin,
+  //       }),
+  //       PartitionKey: eventData.body.from,
+  //       StreamName: process.env.STREAM_NAME,
+  //     }
+
+  //     kinesis.putRecord(newEvent, (err, data) => {
+  //       if (err) {
+  //         callback(null, impl.kinesisError(eventData.schema, err))
+  //       } else {
+  //         callback(null, impl.success(data))
+  //       }
+  //     })
+  //   }
+  // },
 }
 
 const api = {
   /**
-   * @param event The API Gateway lambda invocation event describing the event to be written to the stream.
+   * @param event The API Gateway lambda invocation event describing the Twilio event to be processed.
    * @param context AWS runtime related information, e.g. log group id, timeout, request id, etc.
    * @param callback The callback to inform of completion: (error, result).
    */
   eventHandler: (event, context, callback) => {
-    impl.validateAndWriteKinesisEventFromApiEndpoint(event, callback) // TODO could something from the context be useful for making a traceId?
+    impl.validateApiGatewayRequest(event)
+      .then(impl.validateTwilioRequest)
+      .then(impl.generateCards)
+      // .then(impl.storeImages)
+      .then(impl.sendCards)
+      .then((msg) => {
+        const response = util.response(200, msg)
+        response.headers['Content-Type'] = 'text/xml'
+        callback(null, response)
+      })
+      .catch(ClientError, (ex) => {
+        console.log(`${constants.SERVICE} ${constants.API_NAME} - ${ex.stack}`)
+        callback(null, util.response(400, `${ex.name}: ${ex.message}`))
+      })
+      .catch((ex) => {
+        console.log(`${constants.SERVICE} ${constants.API_NAME} - Uncaught exception: ${ex.stack}`)
+        callback(null, util.response(500, 'Server Error'))
+      })
   },
 }
 
