@@ -34,10 +34,11 @@ functions:
             - .execute-api.${self:custom.private.region}.amazonaws.com/${self:custom.stage}/sms
       # STREAM_NAME:
       #   Fn::ImportValue: ${self:custom.stream.custom.exportStreamName}
-      # IMAGE_BUCKET: ${self:custom.project.eventHandler.bucket}
-      TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
+      IMAGE_BUCKET: ${self:custom.project.eventHandler.bucket}
+      PROJECT_NAME: ${self:custom.project.name}
+      #TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
       TWILIO_AUTH: ${self:custom.private.twilio.authToken} # TODO use KMS to encrpyt this
-      TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}
+      #TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}
     events:
       - http:
           path: sms
@@ -94,14 +95,15 @@ resources:
                       - ':'
                       - - Fn::GetAtt: [ EventHandlerLogGroup, Arn ]
                         - '*'
-          # - PolicyName: StoreImageInBucket
-          #   PolicyDocument:
-          #     Version: '2012-10-17'
-          #     Statement:
-          #       - Effect: Allow
-          #         Action:
-          #           - 's3:putObject'
-          #         Resource: ${self:custom.project.eventHandler.bucketArn}/i/p/*
+          - PolicyName: StoreImageInBucket
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - 's3:putObject'
+                    - 's3:putObjectAcl'
+                  Resource: ${self:custom.project.eventHandler.bucketArn}/${self:custom.project.name}-images/qrc/*
           # - PolicyName: WriteToKinesis
           #   PolicyDocument:
           #     Version: '2012-10-17'

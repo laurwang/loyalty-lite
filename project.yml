@@ -14,5 +14,6 @@ stream:
 
 eventHandler:
   name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
-  bucket: ${self:custom.stage}.loyalty-lite-images
+  bucket: lauren-public
+  #bucket: ${self:custom.stage}.loyalty-lite-images
   bucketArn: arn:aws:s3:::${self:custom.project.eventHandler.bucket}

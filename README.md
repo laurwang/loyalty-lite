@@ -10,4 +10,4 @@ Codes
 NB Twilio has handling for default anti-pestering codes (e.g., STOP).
 
 Notes
-    Create an S3 bucket for your deployments called loyalty-lite.serverless.deployment-bucket.<AWS account region>.
+    Create an S3 bucket for your deployments and your QR code images, and update the project.yml with these.
