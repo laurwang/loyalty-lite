@@ -1,5 +1,6 @@
 // const querystring = require('querystring')
 const uuidv4 = require('uuid/v4')
+const crypto = require('crypto')
 const qrcode = require('qrcode')
 const stream = require('stream')
 const aws = require('aws-sdk') // eslint-disable-line import/no-unresolved, import/no-extraneous-dependencies
@@ -44,7 +45,10 @@ const constants = {
   AWS_S3_URL: 'https://s3.amazonaws.com',
 
   SERVICE: process.env.PROJECT_NAME,
+  STAGE: process.env.STAGE,
   API_NAME: 'Event Handler',
+  SALT: process.env.SALT,
+  UPGRADE_URL: process.env.UPGRADE_URL,
 
   ENDPOINT: process.env.ENDPOINT,
   IMAGE_BUCKET: process.env.IMAGE_BUCKET,
@@ -142,40 +146,52 @@ const impl = {
   /**
    * Handle customer request from code
    */
-  generateCards: (result) => {
+  checkForExistingPunchcard: (result) => {
+    const hmac = crypto.createHmac('sha256', `${constants.SALT}`)
     const phone = result.body.From.substring(1) // get rid of '+'
+    hmac.update(phone)
+    const hashed = hmac.digest('hex')
+
     const trimmed = result.body.Body.trim().toLowerCase()
-    if (trimmed === 'new') { // or 'card' && there are none in the db for the phone number
-      // TODO call Campaign Manager instead
-      const serialNumber = [uuidv4()] // e.g., '416ac246-e7ac-49ff-93b4-f7e94d997e6b'
+
+    if (trimmed === 'more') {
+      // shameless plug
+      return BbPromise.resolve({
+        bypass: `Visit our website ${constants.UPGRADE_URL} to upgrade by entering your phone number.  As soon as we implement this.`,
+      })
+    } else if (trimmed === 'card') {
+      // TODO retrieve from db
+      const serialNumber = uuidv4() // e.g., '416ac246-e7ac-49ff-93b4-f7e94d997e6b' // TODO remove serialNumber references
 
       return BbPromise.resolve({
-        from: phone,
-        serialNumbers: serialNumber,
-        // images: null, // TODO make an actual QRCode using impl.generateCard and return a stream
+        from: hashed,
+        url: `https://test.openapi.starbucks.com/v1/barcode/starbuckscard/12345${phone}`, // TODO soooo remove this.  Has PII.
+        // url: null, // TODO return URL from db, if it exists
+        serialNumber, // TODO remove serialNumber references
       })
-    } else if (trimmed === 'card') { // return all cards found (this should actually be first, before 'new')
-      // call db with key phone
-      // return BbPromise.resolve({
-      //   from: phone,
-      //   serialNumbers: // serialNumbers from db,
-      //   // images: null, // TODO make an actual QRCode using impl.generateCard and return a stream
-      // })
-      return BbPromise.reject(new ClientError(`Request from customer asked for undeveloped feature. Received: '${JSON.stringify(result)}'`))
     } else {
-      return BbPromise.reject(new ClientError(`Request from customer did not contain a valid code. Received: '${JSON.stringify(result)}'`))
+      return BbPromise.resolve({
+        bypass: 'Please text a valid code: CARD or MORE.', // , FORGET, HELP', // TODO implement FORGET and BALANCE
+      })
     }
   },
 
   /**
-   * Using the results of the `impl.generateCards` invocation, place the obtained image into the
+   * Using the results of the `impl.checkForExistingPunchcard` invocation, place the obtained image into the
    * proper location of the bucket for collection by Twilio.
    * @param results An array of images obtained from `getQRCodes`.  Details:
    */
-  generateAndStoreImages: (results) => {
-    const toQR = JSON.stringify(results)
+  generateAndStoreImage: (results) => {
+    if (results.bypass || results.url) {
+      return BbPromise.resolve(results)
+    }
+
     const phone = results.from
-    const serialNumbers = results.serialNumbers
+    const serialNumber = results.serialNumber
+    const toQR = JSON.stringify({
+      hashed: phone,
+      card: serialNumber,
+    })
 
     // create Writable and Readable Stream
     const inoutStream = new Transform({
@@ -190,7 +206,7 @@ const impl = {
 
     qrcode.toFileStream(inoutStream, toQR) // stream is Writable
 
-    const bucketKey = `${constants.SERVICE}-images/qrc/${phone}/${serialNumbers[0]}.png` // TODO parallel write all
+    const bucketKey = `${constants.STAGE}/qrc/${phone}/${serialNumber}.png`
     const params = {
       Bucket: constants.IMAGE_BUCKET,
       Key: bucketKey,
@@ -198,7 +214,7 @@ const impl = {
       ACL: 'public-read',
       ContentType: 'image/png',
       // Metadata: {
-      //   serialNumber: serialNumbers[0],
+      //   serialNumber: serialNumber,
       // },
     }
 
@@ -206,7 +222,7 @@ const impl = {
     return s3.upload(params).promise().then(
       () => BbPromise.resolve({
         message: toQR,
-        images: [`${constants.AWS_S3_URL}/${constants.IMAGE_BUCKET}/${bucketKey}`], // TODO multiple images
+        url: `${constants.AWS_S3_URL}/${constants.IMAGE_BUCKET}/${bucketKey}`,
       }),
       ex => BbPromise.reject(new S3Error(`Error placing image stream: ${ex}`)) // eslint-disable-line comma-dangle
     )
@@ -215,8 +231,14 @@ const impl = {
   sendCards: (results) => {
     const response = new MessagingResponse()
     const message = response.message()
-    message.body(results.message)
-    message.media(results.images[0]) // how do i give them multiple?  as an array, comma-separated??
+
+    if (results.bypass) {
+      message.body(results.bypass)
+    } else {
+      message.body('Text MORE for information on how to earn free coffees twice as fast.')
+      // message.body(results.message) // TODO remove
+      message.media(results.url) // how do i give them multiple?  probably multiple calls to .media
+    }
 
     return response.toString()
   },
@@ -231,7 +253,7 @@ const impl = {
   //     const newEvent = {
   //       Data: JSON.stringify({
   //         schema: 'com.starbucks/event-ledger/stream-ingress/1-0-0', // see ./schemas/stream-ingress in the workfront-subscriptions node module for reference
-  //         timeOrigin: received, // TODO flag and handle re-try by looking at Workfront timestamp and received timestamp.  Use Workfront timestamp instead here.
+  //         timeOrigin: received,
   //         data: eventData.body,
   //         origin,
   //       }),
@@ -259,8 +281,8 @@ const api = {
   eventHandler: (event, context, callback) => {
     impl.validateApiGatewayRequest(event)
       .then(impl.validateTwilioRequest)
-      .then(impl.generateCards)
-      .then(impl.generateAndStoreImages)
+      .then(impl.checkForExistingPunchcard)
+      .then(impl.generateAndStoreImage)
       .then(impl.sendCards)
       .then((msg) => {
         const response = util.response(200, msg)

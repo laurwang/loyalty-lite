@@ -5,15 +5,15 @@
 # ```
 # Top Level Project
 name: loyalty-lite
-deploymentBucket: lauren-serverless-deploy
-#deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${self:custom.private.region}
+# deploymentBucket: lauren-serverless-deploy
+deploymentBucket: ${self:custom.project.name}.serverless.deployment-bucket.${self:custom.private.region}
 
-stream:
-  name: ${self:custom.stage}-${self:custom.project.name}-stream
-  arn: arn:aws:kinesis:${self:custom.private.region}:${self:custom.private.accountId}:stream/${self:custom.project.stream.name}
+# stream:
+#   name: ${self:custom.stage}-${self:custom.project.name}-stream
+#   arn: arn:aws:kinesis:${self:custom.private.region}:${self:custom.private.accountId}:stream/${self:custom.project.stream.name}
 
 eventHandler:
   name: ${self:custom.stage}-${self:custom.project.name}-eventHandler
-  bucket: lauren-public
-  #bucket: ${self:custom.stage}.loyalty-lite-images
+  # bucket: lauren-public
+  bucket: ${self:custom.project.name}.images
   bucketArn: arn:aws:s3:::${self:custom.project.eventHandler.bucket}

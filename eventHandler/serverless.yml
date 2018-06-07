@@ -36,9 +36,12 @@ functions:
       #   Fn::ImportValue: ${self:custom.stream.custom.exportStreamName}
       IMAGE_BUCKET: ${self:custom.project.eventHandler.bucket}
       PROJECT_NAME: ${self:custom.project.name}
-      #TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
-      TWILIO_AUTH: ${self:custom.private.twilio.authToken} # TODO use KMS to encrpyt this
-      #TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}
+      STAGE: ${self:custom.stage}
+      SALT: ${self:custom.private.accountId} # TODO use KMS to encrpyt this and something better than accountId
+      UPGRADE_URL: https://www.starbucks.com/account/signin
+      # TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
+      # TWILIO_AUTH: ${self:custom.private.twilio.authToken} # TODO use KMS to encrpyt this
+      # TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}
     events:
       - http:
           path: sms
@@ -103,7 +106,7 @@ resources:
                   Action:
                     - 's3:putObject'
                     - 's3:putObjectAcl'
-                  Resource: ${self:custom.project.eventHandler.bucketArn}/${self:custom.project.name}-images/qrc/*
+                  Resource: ${self:custom.project.eventHandler.bucketArn}/${self:custom.stage}/*
           # - PolicyName: WriteToKinesis
           #   PolicyDocument:
           #     Version: '2012-10-17'
