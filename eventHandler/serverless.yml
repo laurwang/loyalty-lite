@@ -71,7 +71,22 @@ resources:
       Properties:
         LogGroupName: /aws/lambda/${self:service}-${self:custom.stage}-eventHandler
         RetentionInDays: 7
-
+    # Table
+    KnownPhone:
+      # S3 Urls, keyed by hashed phone numbers
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: phoneHash
+            AttributeType: S
+        KeySchema:
+          - AttributeName: phoneHash
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 10
+          WriteCapacityUnits: 10
+        TableName: ${opt:stage}-KnownPhone
+    # IAM Role for Lambda
     EventHandler: # role for the Event Handler Lambda to write to logs and the Kinesis Stream
       Type: AWS::IAM::Role
       Properties:
@@ -107,6 +122,19 @@ resources:
                     - 's3:putObject'
                     - 's3:putObjectAcl'
                   Resource: ${self:custom.project.eventHandler.bucketArn}/${self:custom.stage}/*
+          - PolicyName: ReadAndStoreMediaUrl
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                -  Effect: Allow
+                   Action:
+                     - 'dynamodb:PutItem'
+                     - 'dynamodb:GetItem'
+                   Resource:
+                    Fn::Join:
+                      - '/'
+                      - - 'arn:aws:dynamodb:${self:custom.private.region}:${self:custom.private.accountId}:table'
+                        - Ref: KnownPhone
           # - PolicyName: WriteToKinesis
           #   PolicyDocument:
           #     Version: '2012-10-17'

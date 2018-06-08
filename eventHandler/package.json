@@ -13,8 +13,7 @@
     "ajv": "^4.11.3",
     "bluebird": "^3.4.7",
     "loyalty-lite-schemas": "../loyalty-lite-schemas",
-    "qrcode": "^1.2.0",
-    "twilio": "^3.17.1",
-    "uuid": "^3.2.1"
+    "node-fetch": "^2.1.2",
+    "twilio": "^3.17.1"
   }
 }
