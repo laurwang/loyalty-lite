@@ -18,7 +18,7 @@ provider:
   deploymentBucket: ${self:custom.project.deploymentBucket}
   runtime: nodejs6.10
   profile: ${self:custom.private.profile}
-  region: ${self:custom.private.region}
+  region: ${self:custom.private.barcodeServiceKey}
 
 functions:
   eventHandler:
@@ -39,6 +39,8 @@ functions:
       STAGE: ${self:custom.stage}
       SALT: ${self:custom.private.accountId} # TODO use KMS to encrpyt this and something better than accountId
       UPGRADE_URL: https://www.starbucks.com/account/signin
+      BARCODE_SERVICE_URL: ${self:custom.project.eventHandler.barcodeService.url}
+      BARCODE_SERVICE_KEY: ${self:custom.project.eventHandler.barcodeService.apiKey}
       # TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
       # TWILIO_AUTH: ${self:custom.private.twilio.authToken} # TODO use KMS to encrpyt this
       # TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}

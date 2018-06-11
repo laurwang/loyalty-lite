@@ -54,6 +54,8 @@ const constants = {
   SALT: process.env.SALT,
   UPGRADE_URL: process.env.UPGRADE_URL,
   TABLE_NAME: 'KnownPhone',
+  BARCODE_SERVICE_URL: process.env.BARCODE_SERVICE_URL,
+  BARCODE_SERVICE_KEY: process.env.BARCODE_SERVICE_KEY,
 
   ENDPOINT: process.env.ENDPOINT,
   IMAGE_BUCKET: process.env.IMAGE_BUCKET,
@@ -267,10 +269,21 @@ const impl = {
       },
     })
     inoutStream.on('finish', () => { // TODO remove
-      console.log(`Barcode generated for ${results.original}`)
+      console.log('Barcode generated.') // for ${results.original}`)
     })
 
-    return fetch(`https://test.openapi.starbucks.com/v1/barcode/starbuckscard/12345${results.original}`)
+    // return fetch(`https://test.openapi.starbucks.com/v1/barcode/starbuckscard/12345${results.original}`)
+    // return fetch(`${constants.BARCODE_SERVICE_URL}?hash=${phoneHash}`, {
+    return fetch(constants.BARCODE_SERVICE_URL,
+      {
+        method: 'POST',
+        headers: {
+          'x-api-key': constants.BARCODE_SERVICE_KEY,
+        },
+        body: {
+          hash: phoneHash,
+        },
+      })
       .then((res) => {
         res.body.pipe(inoutStream) // stream is Writable
 
@@ -281,9 +294,9 @@ const impl = {
           Body: inoutStream, // stream is Readable
           ACL: 'public-read',
           ContentType: 'image/png',
-        // Metadata: {
-        //   serialNumber: serialNumber,
-        // },
+          // Metadata: {
+          //   serialNumber: serialNumber,
+          // },
         }
 
         // NB putObject won't work with a stream.  See https://stackoverflow.com/questions/38442512/difference-between-upload-and-putobject-for-uploading-a-file-to-s3
@@ -303,7 +316,7 @@ const impl = {
 
         return dynamo.put(params).promise().then(
           () => BbPromise.resolve({
-            message: 'Called GetNewBarcode',
+            message: 'Welcome to easy coffee perks.',
             url: data.url,
           }),
           ex => BbPromise.reject(new DynamoError(`Error putting url: ${ex}`)) // eslint-disable-line comma-dangle
