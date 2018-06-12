@@ -56,6 +56,7 @@ const constants = {
   TABLE_NAME: 'KnownPhone',
   BARCODE_SERVICE_URL: process.env.BARCODE_SERVICE_URL,
   BARCODE_SERVICE_KEY: process.env.BARCODE_SERVICE_KEY,
+  FREE_BARCODE_GENERATOR: process.env.FREE_BARCODE_GENERATOR,
 
   ENDPOINT: process.env.ENDPOINT,
   IMAGE_BUCKET: process.env.IMAGE_BUCKET,
@@ -254,7 +255,7 @@ const impl = {
    * and place the obtained image into the proper location of the bucket for collection by Twilio.
    * @param results The url for the barcode image
    */
-  generateAndStoreImage: (results) => {
+  generateAndStoreImage: (results) => { // TODO break this into generateImage and storeImage
     if (results.bypass || results.url) {
       return BbPromise.resolve(results)
     }
@@ -279,48 +280,54 @@ const impl = {
         method: 'POST',
         headers: {
           'x-api-key': constants.BARCODE_SERVICE_KEY,
+          'Content-Type': 'application/json',
         },
         body: {
           hash: phoneHash,
         },
       })
-      .then((res) => {
-        res.body.pipe(inoutStream) // stream is Writable
+      .then(res => res.json())
+      .then((json) => {
+        console.log(`Received ${JSON.stringify(json)}`)
+        return fetch(`${constants.FREE_BARCODE_GENERATOR}/${json.card_number}`)
+          .then((res) => {
+            res.body.pipe(inoutStream) // stream is Writable
 
-        const bucketKey = `${constants.STAGE}/bc/${phoneHash}.png`
-        const params = {
-          Bucket: constants.IMAGE_BUCKET,
-          Key: bucketKey,
-          Body: inoutStream, // stream is Readable
-          ACL: 'public-read',
-          ContentType: 'image/png',
-          // Metadata: {
-          //   serialNumber: serialNumber,
-          // },
-        }
+            const bucketKey = `${constants.STAGE}/bc/${phoneHash}.png`
+            const params = {
+              Bucket: constants.IMAGE_BUCKET,
+              Key: bucketKey,
+              Body: inoutStream, // stream is Readable
+              ACL: 'public-read',
+              ContentType: 'image/png',
+              // Metadata: {
+              //   serialNumber: serialNumber,
+              // },
+            }
 
-        // NB putObject won't work with a stream.  See https://stackoverflow.com/questions/38442512/difference-between-upload-and-putobject-for-uploading-a-file-to-s3
-        return s3.upload(params).promise().then(
-          () => BbPromise.resolve({
-            phoneHash,
-            url: `${constants.AWS_S3_URL}/${constants.IMAGE_BUCKET}/${bucketKey}`,
-          }),
-          ex => BbPromise.reject(new S3Error(`Error placing image stream: ${ex}`)) // eslint-disable-line comma-dangle
-        )
-      })
-      .then((data) => {
-        const params = {
-          TableName: `${constants.STAGE}-${constants.TABLE_NAME}`,
-          Item: data,
-        }
+            // NB putObject won't work with a stream.  See https://stackoverflow.com/questions/38442512/difference-between-upload-and-putobject-for-uploading-a-file-to-s3
+            return s3.upload(params).promise().then(
+              () => BbPromise.resolve({
+                phoneHash,
+                url: `${constants.AWS_S3_URL}/${constants.IMAGE_BUCKET}/${bucketKey}`,
+              }),
+              ex => BbPromise.reject(new S3Error(`Error placing image stream: ${ex}`)) // eslint-disable-line comma-dangle
+            )
+          })
+          .then((data) => {
+            const params = {
+              TableName: `${constants.STAGE}-${constants.TABLE_NAME}`,
+              Item: data,
+            }
 
-        return dynamo.put(params).promise().then(
-          () => BbPromise.resolve({
-            message: 'Welcome to easy coffee perks.',
-            url: data.url,
-          }),
-          ex => BbPromise.reject(new DynamoError(`Error putting url: ${ex}`)) // eslint-disable-line comma-dangle
-        )
+            return dynamo.put(params).promise().then(
+              () => BbPromise.resolve({
+                message: 'Welcome to easy coffee perks.',
+                url: data.url,
+              }),
+              ex => BbPromise.reject(new DynamoError(`Error putting url: ${ex}`)) // eslint-disable-line comma-dangle
+            )
+          })
       })
   },
 

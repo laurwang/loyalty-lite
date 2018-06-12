@@ -41,6 +41,7 @@ functions:
       UPGRADE_URL: https://www.starbucks.com/account/signin
       BARCODE_SERVICE_URL: ${self:custom.project.eventHandler.barcodeService.url}
       BARCODE_SERVICE_KEY: ${self:custom.project.eventHandler.barcodeService.apiKey}
+      FREE_BARCODE_GENERATOR: ${self:custom.project.eventHandler.barcodeGenerator}
       # TWILIO_ACC: ${self:custom.private.twilio.accountSid} # TODO use KMS to encrpyt this
       # TWILIO_AUTH: ${self:custom.private.twilio.authToken} # TODO use KMS to encrpyt this
       # TWILIO_PHONE: ${self:custom.private.twilio.phoneNumber}

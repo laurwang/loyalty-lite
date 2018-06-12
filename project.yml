@@ -18,5 +18,7 @@ eventHandler:
   bucket: ${self:custom.project.name}.images
   bucketArn: arn:aws:s3:::${self:custom.project.eventHandler.bucket}
   barcodeService:
-    url: https://vkjs227xed.execute-api.us-east-1.amazonaws.com/dev/barcode
-    apiKey: ${self:custom.private.region}
+    # url: https://vkjs227xed.execute-api.us-east-1.amazonaws.com/dev/barcode
+    url: https://mz7fxzosek.execute-api.us-east-1.amazonaws.com/dev/newCardNumber
+    apiKey: ${self:custom.private.barcodeServiceKey}
+  barcodeGenerator: https://test.openapi.starbucks.com/v1/barcode/starbuckscard
