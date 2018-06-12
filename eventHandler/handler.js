@@ -157,7 +157,8 @@ const impl = {
     const hmac = crypto.createHmac('sha256', `${constants.SALT}`)
     const phone = result.body.From.substring(1) // get rid of '+'
     hmac.update(phone)
-    const hashed = hmac.digest('hex')
+    const hashed = hmac.digest('hex').substring(0, 28)
+    console.log(hashed)
 
     const trimmed = result.body.Body.trim().toLowerCase()
 
